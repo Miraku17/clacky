@@ -18,6 +18,16 @@ final class AppState: ObservableObject {
     private let library: PackLibrary
     private let listener = KeyListener()
     private var pack: SoundPack?
+    private var switcher = PackSwitcher()
+
+    // Error sources, combined into `lastError`. Each clears itself when its step succeeds.
+    private var packError: String?
+    private var tapError: String?
+    private var prepareError: String?
+    private var loginError: String?
+
+    private var permissionPoll: Timer?
+    private var windowObserver: NSObjectProtocol?
 
     init() {
         library = PackLibrary(packsDirectory: PackLibrary.defaultPacksDirectory,
@@ -26,8 +36,15 @@ final class AppState: ObservableObject {
         volume = settings.volume
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }
+        // The MenuBarExtra panel is the app's only window; refresh whenever it becomes key.
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.refresh() }
         refresh()
-        if !hasPermission { KeyListener.requestPermission() }
+        if !hasPermission {
+            KeyListener.requestPermission()
+            startPermissionPoll()
+        }
     }
 
     /// Hot path. Runs on the main thread from the event tap.
@@ -37,22 +54,51 @@ final class AppState: ObservableObject {
         audio.play(pack.buffer(for: code))
     }
 
-    /// Called whenever the panel opens: re-check permission, rescan packs, load the first pack if none is loaded.
+    /// Re-checks permission, installs the tap when possible, rescans packs,
+    /// and loads the remembered (or first) pack when none is loaded.
     func refresh() {
-        hasPermission = KeyListener.hasPermission
-        if hasPermission { listener.start() }
+        ensureListening()
         launchAtLogin = SMAppService.mainApp.status == .enabled
-        do { try library.prepare() } catch { lastError = error.localizedDescription }
+        do {
+            try library.prepare()
+            prepareError = nil
+        } catch {
+            prepareError = error.localizedDescription
+        }
         availablePacks = library.availablePacks().map(\.lastPathComponent)
         if pack == nil, let first = availablePacks.first {
             let wanted = settings.selectedPackName ?? first
             selectPack(availablePacks.contains(wanted) ? wanted : first)
         }
+        publishErrors()
+    }
+
+    private func ensureListening() {
+        hasPermission = KeyListener.hasPermission
+        guard hasPermission else { return }
+        if listener.start() {
+            tapError = nil
+            permissionPoll?.invalidate()
+            permissionPoll = nil
+        } else {
+            tapError = "Could not install the keyboard listener. Toggle Clacky off and on in Input Monitoring."
+        }
+    }
+
+    /// Until Input Monitoring is granted, check every couple of seconds so the
+    /// tap goes live the moment the user flips the switch in System Settings.
+    private func startPermissionPoll() {
+        guard permissionPoll == nil else { return }
+        permissionPoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.ensureListening()
+            self.publishErrors()
+        }
     }
 
     func selectPack(_ name: String) {
-        guard !name.isEmpty, name != selectedPack || pack == nil else { return }
-        selectedPack = name
+        guard switcher.request(name) else { return }
+        selectedPack = switcher.selected
         DispatchQueue.global(qos: .userInitiated).async { [library] in
             let result = Result { try library.load(named: name) }
             DispatchQueue.main.async { self.finishLoading(name: name, result: result) }
@@ -60,20 +106,29 @@ final class AppState: ObservableObject {
     }
 
     private func finishLoading(name: String, result: Result<SoundPack, Error>) {
-        switch result {
-        case .success(let loaded):
+        let loaded = try? result.get()
+        switch switcher.finished(name, success: loaded != nil) {
+        case .apply:
             pack = loaded
             settings.selectedPackName = name
-            lastError = nil
-        case .failure(let error):
-            lastError = "\(name): \(error.localizedDescription)"
-            if let current = pack { selectedPack = current.folder.lastPathComponent }
+            packError = nil
+        case .ignore:
+            return
+        case .revert:
+            if case .failure(let error) = result { packError = "\(name): \(error.localizedDescription)" }
         }
+        selectedPack = switcher.selected
+        publishErrors()
+    }
+
+    private func publishErrors() {
+        lastError = packError ?? tapError ?? audio.lastError ?? prepareError ?? loginError
     }
 
     func requestPermission() {
         KeyListener.requestPermission()
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
+        startPermissionPoll()
         refresh()
     }
 
@@ -82,10 +137,11 @@ final class AppState: ObservableObject {
     func setLaunchAtLogin(_ on: Bool) {
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            lastError = nil
+            loginError = nil
         } catch {
-            lastError = "Launch at login: \(error.localizedDescription)"
+            loginError = "Launch at login: \(error.localizedDescription)"
         }
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        publishErrors()
     }
 }

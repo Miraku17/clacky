@@ -71,3 +71,32 @@ enum SoundPackTests {
         }
     }
 }
+
+enum SoundPackReviewTests {
+    static func run() {
+        TestKit.run("SoundPack resolves arrow keys defined only with the 61000-series codes") {
+            try TestKit.withTempDir { tmp in
+                let folder = tmp.appendingPathComponent("arrows")
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try Data(#"{"key_define_type":"multi","defines":{"61003":"left.wav","1":"other.wav"}}"#.utf8)
+                    .write(to: folder.appendingPathComponent("config.json"))
+                try TestAudio.writeWav(to: folder.appendingPathComponent("left.wav"), seconds: 0.1)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("other.wav"), seconds: 0.3)
+                let pack = try SoundPack(folder: folder)
+                expectEqual(Double(pack.buffer(for: 57419).frameLength), 4_800, accuracy: 480, "libuiohook left arrow should use the 61003 define")
+            }
+        }
+        TestKit.run("SoundPack resolves arrow keys defined only with the libuiohook codes") {
+            try TestKit.withTempDir { tmp in
+                let folder = tmp.appendingPathComponent("arrows2")
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try Data(#"{"key_define_type":"multi","defines":{"57416":"up.wav","1":"other.wav"}}"#.utf8)
+                    .write(to: folder.appendingPathComponent("config.json"))
+                try TestAudio.writeWav(to: folder.appendingPathComponent("up.wav"), seconds: 0.1)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("other.wav"), seconds: 0.3)
+                let pack = try SoundPack(folder: folder)
+                expectEqual(Double(pack.buffer(for: 61000).frameLength), 4_800, accuracy: 480)
+            }
+        }
+    }
+}

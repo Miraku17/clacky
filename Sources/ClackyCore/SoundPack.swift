@@ -54,10 +54,20 @@ public final class SoundPack {
     }
 
     /// The buffer for a Mechvibes key code, or a deterministic fallback so no key is silent.
+    /// Arrow keys exist under two code sets in the wild (libuiohook 574xx and iohook 610xx);
+    /// either one satisfies the other.
     public func buffer(for mechvibesCode: Int) -> AVAudioPCMBuffer {
         if let b = buffers[mechvibesCode] { return b }
+        if let alias = Self.aliases[mechvibesCode], let b = buffers[alias] { return b }
         return fallbackPool[abs(mechvibesCode) % fallbackPool.count]
     }
+
+    private static let aliases: [Int: Int] = [
+        57416: 61000, 61000: 57416,   // up
+        57419: 61003, 61003: 57419,   // left
+        57421: 61005, 61005: 57421,   // right
+        57424: 61008, 61008: 57424,   // down
+    ]
 
     private static func loadCanonical(_ url: URL) throws -> AVAudioPCMBuffer {
         guard FileManager.default.fileExists(atPath: url.path) else { throw Error.missingAudioFile(url.lastPathComponent) }

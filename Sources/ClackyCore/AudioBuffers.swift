@@ -88,9 +88,12 @@ public enum AudioBuffers {
     /// Copies `[startMs, startMs + durationMs)` out of a canonical buffer, clamped to its end.
     /// Throws `emptyBuffer` when the window starts at or after the end.
     public static func slice(_ source: AVAudioPCMBuffer, startMs: Double, durationMs: Double) throws -> AVAudioPCMBuffer {
+        guard startMs.isFinite, durationMs.isFinite else { throw Error.emptyBuffer }
+        // Clamp in the Double domain first: Int(Double) traps on values beyond Int.max.
         let total = Int(source.frameLength)
-        let start = max(0, min(total, Int(startMs / 1_000 * sampleRate)))
-        let end = max(start, min(total, Int((startMs + durationMs) / 1_000 * sampleRate)))
+        let totalD = Double(total)
+        let start = Int(max(0, min(totalD, startMs / 1_000 * sampleRate)))
+        let end = Int(max(Double(start), min(totalD, (startMs + durationMs) / 1_000 * sampleRate)))
         let n = end - start
         guard n > 0, let out = AVAudioPCMBuffer(pcmFormat: source.format, frameCapacity: AVAudioFrameCount(n))
         else { throw Error.emptyBuffer }

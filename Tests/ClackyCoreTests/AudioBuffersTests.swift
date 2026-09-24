@@ -50,3 +50,17 @@ enum AudioBuffersTests {
         }
     }
 }
+
+enum AudioBuffersReviewTests {
+    static func run() {
+        TestKit.run("AudioBuffers slice with absurd start throws instead of trapping") {
+            expectThrows(try AudioBuffers.slice(TestAudio.ramp(frames: 1_000), startMs: 1e300, durationMs: 10))
+            expectThrows(try AudioBuffers.slice(TestAudio.ramp(frames: 1_000), startMs: .nan, durationMs: 10))
+            expectThrows(try AudioBuffers.slice(TestAudio.ramp(frames: 1_000), startMs: 0, durationMs: .infinity - .infinity))
+        }
+        TestKit.run("AudioBuffers slice with huge negative start and huge duration returns the whole buffer") {
+            let out = try AudioBuffers.slice(TestAudio.ramp(frames: 1_000), startMs: -1e300, durationMs: 1e308)
+            expectEqual(out.frameLength, 1_000)
+        }
+    }
+}
