@@ -9,6 +9,8 @@ private let log = Logger(subsystem: "com.zianvalles.clacky", category: "tap")
 final class KeyListener {
     /// Called on the main thread with the macOS virtual key code of every non-repeat press.
     var onKeyPress: ((Int64) -> Void)?
+    /// Called on the main thread with the key code of every key up (including modifier releases).
+    var onKeyRelease: ((Int64) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -27,7 +29,7 @@ final class KeyListener {
     @discardableResult
     func start() -> Bool {
         if tap != nil { return true }
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                                            options: .listenOnly, eventsOfInterest: mask,
@@ -63,9 +65,15 @@ final class KeyListener {
             eventCount += 1
             if eventCount <= 5 || eventCount % 200 == 0 { log.notice("keyDown code=\(code) total=\(self.eventCount)") }
             onKeyPress?(code)
+        case .keyUp:
+            onKeyRelease?(event.getIntegerValueField(.keyboardEventKeycode))
         case .flagsChanged:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
-            if modifiers.isPress(keyCode: code, flags: event.flags.rawValue) { onKeyPress?(code) }
+            switch modifiers.event(keyCode: code, flags: event.flags.rawValue) {
+            case .press: onKeyPress?(code)
+            case .release: onKeyRelease?(code)
+            case nil: break
+            }
         default:
             break
         }

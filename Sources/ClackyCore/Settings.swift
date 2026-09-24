@@ -2,7 +2,10 @@ import Foundation
 
 public final class Settings {
     private let defaults: UserDefaults
-    private enum Key { static let enabled = "enabled", volume = "volume", pack = "selectedPackName" }
+    private enum Key {
+        static let enabled = "enabled", volume = "volume", pack = "selectedPackName"
+        static let releaseSounds = "releaseSounds", pitchVariation = "pitchVariation"
+    }
 
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
@@ -19,5 +22,15 @@ public final class Settings {
     public var selectedPackName: String? {
         get { defaults.string(forKey: Key.pack) }
         set { defaults.set(newValue, forKey: Key.pack) }
+    }
+
+    public var releaseSounds: Bool {
+        get { defaults.object(forKey: Key.releaseSounds) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.releaseSounds) }
+    }
+
+    public var pitchVariation: Bool {
+        get { defaults.object(forKey: Key.pitchVariation) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.pitchVariation) }
     }
 }

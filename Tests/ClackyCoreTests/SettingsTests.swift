@@ -32,3 +32,30 @@ enum SettingsTests {
         }
     }
 }
+
+enum SettingsV2Tests {
+    private static func withDefaults(_ body: (UserDefaults) throws -> Void) rethrows {
+        let suite = "clacky-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try body(defaults)
+    }
+    static func run() {
+        TestKit.run("Settings release and pitch default on") {
+            withDefaults { d in
+                let s = Settings(defaults: d)
+                expect(s.releaseSounds)
+                expect(s.pitchVariation)
+            }
+        }
+        TestKit.run("Settings release and pitch round trip") {
+            withDefaults { d in
+                let s = Settings(defaults: d)
+                s.releaseSounds = false
+                s.pitchVariation = false
+                expect(!Settings(defaults: d).releaseSounds)
+                expect(!Settings(defaults: d).pitchVariation)
+            }
+        }
+    }
+}

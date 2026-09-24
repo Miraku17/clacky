@@ -10,6 +10,12 @@ private let log = Logger(subsystem: "com.zianvalles.clacky", category: "state")
 final class AppState: ObservableObject {
     @Published var enabled: Bool { didSet { settings.enabled = enabled } }
     @Published var volume: Float { didSet { settings.volume = volume; audio.volume = volume } }
+    @Published var releaseSounds: Bool { didSet { settings.releaseSounds = releaseSounds } }
+    @Published var pitchVariation: Bool { didSet { settings.pitchVariation = pitchVariation } }
+    @Published private(set) var packHasReleaseSounds = false
+    let pressed = PressedKeys()
+    /// True when launch found no Input Monitoring grant; the app opens its window so the instructions are visible.
+    private(set) var opensWindowOnLaunch = false
     @Published private(set) var availablePacks: [String] = []
     @Published private(set) var packInfos: [PackInfo] = []
     @Published private(set) var selectedPack: String = ""
@@ -40,13 +46,17 @@ final class AppState: ObservableObject {
                               bundledPacksDirectory: Bundle.main.resourceURL?.appendingPathComponent("Packs"))
         enabled = settings.enabled
         volume = settings.volume
+        releaseSounds = settings.releaseSounds
+        pitchVariation = settings.pitchVariation
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }
+        listener.onKeyRelease = { [weak self] code in self?.keyReleased(code) }
         // The MenuBarExtra panel is the app's only window; refresh whenever it becomes key.
         windowObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.refresh() }
         refresh()
+        opensWindowOnLaunch = !hasPermission
         if !hasPermission {
             KeyListener.requestPermission()
             startPermissionPoll()
@@ -56,6 +66,7 @@ final class AppState: ObservableObject {
     /// Hot path. Runs on the main thread from the event tap.
     private var ignoredKeyLogs = 0
     private func keyPressed(_ macCode: Int64) {
+        pressed.codes.insert(macCode)
         guard enabled, let pack else {
             if ignoredKeyLogs < 5 {
                 ignoredKeyLogs += 1
@@ -64,7 +75,31 @@ final class AppState: ObservableObject {
             return
         }
         let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
-        audio.play(pack.buffer(for: code))
+        audio.play(pack.buffer(for: code), rate: currentRate())
+    }
+
+    private func keyReleased(_ macCode: Int64) {
+        pressed.codes.remove(macCode)
+        guard enabled, releaseSounds, let pack else { return }
+        let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
+        if let buffer = pack.releaseBuffer(for: code) { audio.play(buffer, rate: currentRate()) }
+    }
+
+    private func currentRate() -> Float { pitchVariation ? PitchVariation.rate() : 1 }
+
+    /// A click on the drawn keyboard: press now, release 80 ms later.
+    func previewKey(_ macCode: Int64) {
+        keyPressed(macCode)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.keyReleased(macCode) }
+    }
+
+    func windowDidAppear() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowDidClose() {
+        NSApp.setActivationPolicy(.accessory)
     }
 
     /// Re-checks permission, installs the tap when possible, rescans packs,
@@ -137,6 +172,7 @@ final class AppState: ObservableObject {
         switch switcher.finished(name, success: loaded != nil) {
         case .apply:
             pack = loaded
+            packHasReleaseSounds = loaded?.hasReleaseSounds ?? false
             settings.selectedPackName = name
             packError = nil
             log.notice("pack loaded: \(name, privacy: .public) keys=\(loaded?.keyCount ?? 0) generic=\(loaded?.hasGenericPool ?? false)")
