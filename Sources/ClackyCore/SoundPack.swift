@@ -20,6 +20,10 @@ public final class SoundPack {
     public let folder: URL
     private let buffers: [Int: AVAudioPCMBuffer]
     private let fallbackPool: [AVAudioPCMBuffer]
+    private let releaseBuffers: [Int: AVAudioPCMBuffer]
+    private let releasePool: [AVAudioPCMBuffer]
+    /// True when the pack ships any key-up (release) sample.
+    public let hasReleaseSounds: Bool
 
     public var keyCount: Int { buffers.count }
     /// True for version-2 packs whose undefined keys draw from a generic pool.
@@ -34,6 +38,8 @@ public final class SoundPack {
 
         var map: [Int: AVAudioPCMBuffer] = [:]
         var generic: [AVAudioPCMBuffer] = []
+        var upMap: [Int: AVAudioPCMBuffer] = [:]
+        var releaseGeneric: [AVAudioPCMBuffer] = []
         switch config.keyDefineType {
         case .single:
             let sprite = try Self.loadCanonical(folder.appendingPathComponent(config.sound ?? ""))
@@ -61,11 +67,24 @@ public final class SoundPack {
                 }
                 map[code] = cache[file]
             }
+            // Release sounds are optional: missing or undecodable files are skipped.
+            for file in config.genericReleaseFiles {
+                if cache[file] == nil, let b = Self.loadOptional(folder.appendingPathComponent(file)) { cache[file] = b }
+                if let b = cache[file] { releaseGeneric.append(b) }
+            }
+            for (code, define) in config.keyUpDefines {
+                guard case .file(let file) = define else { continue }
+                if cache[file] == nil, let b = Self.loadOptional(folder.appendingPathComponent(file)) { cache[file] = b }
+                if let b = cache[file] { upMap[code] = b }
+            }
         }
         guard !map.isEmpty || !generic.isEmpty else { throw Error.noSounds(name) }
         buffers = map
         hasGenericPool = !generic.isEmpty
         fallbackPool = generic.isEmpty ? map.keys.sorted().map { map[$0]! } : generic
+        releaseBuffers = upMap
+        releasePool = releaseGeneric
+        hasReleaseSounds = !upMap.isEmpty || !releaseGeneric.isEmpty
     }
 
     /// The buffer for a Mechvibes key code, or a deterministic fallback so no key is silent.
@@ -83,6 +102,19 @@ public final class SoundPack {
         57421: 61005, 61005: 57421,   // right
         57424: 61008, 61008: 57424,   // down
     ]
+
+    /// The release (key-up) buffer for a key, or nil when the pack has none for it.
+    public func releaseBuffer(for mechvibesCode: Int) -> AVAudioPCMBuffer? {
+        if let b = releaseBuffers[mechvibesCode] { return b }
+        if let alias = Self.aliases[mechvibesCode], let b = releaseBuffers[alias] { return b }
+        guard !releasePool.isEmpty else { return nil }
+        return releasePool[abs(mechvibesCode) % releasePool.count]
+    }
+
+    private static func loadOptional(_ url: URL) -> AVAudioPCMBuffer? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try? loadCanonical(url)
+    }
 
     private static func loadCanonical(_ url: URL) throws -> AVAudioPCMBuffer {
         guard FileManager.default.fileExists(atPath: url.path) else { throw Error.missingAudioFile(url.lastPathComponent) }
