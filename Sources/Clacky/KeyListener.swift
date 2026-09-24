@@ -1,6 +1,9 @@
 import CoreGraphics
 import Foundation
+import os
 import ClackyCore
+
+private let log = Logger(subsystem: "com.zianvalles.clacky", category: "tap")
 
 /// Listen-only session event tap on the main run loop.
 final class KeyListener {
@@ -10,6 +13,7 @@ final class KeyListener {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var modifiers = ModifierTracker()
+    private var eventCount = 0
 
     static var hasPermission: Bool { CGPreflightListenEventAccess() }
 
@@ -28,12 +32,16 @@ final class KeyListener {
         guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                                            options: .listenOnly, eventsOfInterest: mask,
                                            callback: keyListenerCallback, userInfo: refcon)
-        else { return false }
+        else {
+            log.error("tapCreate failed: Input Monitoring not granted for this build")
+            return false
+        }
         let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
         tap = port
         source = src
+        log.notice("event tap installed")
         return true
     }
 
@@ -47,10 +55,14 @@ final class KeyListener {
     fileprivate func handle(type: CGEventType, event: CGEvent) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            log.error("tap disabled by system (\(type.rawValue)); re-enabling")
             if let port = tap { CGEvent.tapEnable(tap: port, enable: true) }
         case .keyDown:
             guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return }
-            onKeyPress?(event.getIntegerValueField(.keyboardEventKeycode))
+            let code = event.getIntegerValueField(.keyboardEventKeycode)
+            eventCount += 1
+            if eventCount <= 5 || eventCount % 200 == 0 { log.notice("keyDown code=\(code) total=\(self.eventCount)") }
+            onKeyPress?(code)
         case .flagsChanged:
             let code = event.getIntegerValueField(.keyboardEventKeycode)
             if modifiers.isPress(keyCode: code, flags: event.flags.rawValue) { onKeyPress?(code) }

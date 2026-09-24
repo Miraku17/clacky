@@ -13,7 +13,10 @@ cp "$BIN/Clacky" "$APP/Contents/MacOS/Clacky"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R Resources/Packs "$APP/Contents/Resources/Packs"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-codesign --force --sign - "$APP"
+# Ad-hoc signing normally keys the identity to the binary's hash, so every rebuild
+# invalidates the Input Monitoring grant. Pin the designated requirement to the
+# bundle identifier instead, which stays the same across builds.
+codesign --force --sign - --requirements '=designated => identifier "com.zianvalles.clacky"' "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then

@@ -1,5 +1,8 @@
 import AVFoundation
 import Foundation
+import os
+
+private let log = Logger(subsystem: "com.zianvalles.clacky", category: "audio")
 
 /// A fixed pool of player nodes so rapid overlapping keystrokes all sound.
 /// Buffers must be in `AudioBuffers.canonicalFormat`.
@@ -30,8 +33,12 @@ public final class AudioEngine {
     public func play(_ buffer: AVAudioPCMBuffer) {
         lock.lock(); defer { lock.unlock() }
         if !engine.isRunning {
-            do { try engine.start(); lastError = nil }
-            catch { lastError = "Audio engine: \(error.localizedDescription)"; return }
+            do { try engine.start(); lastError = nil; log.notice("audio engine started") }
+            catch {
+                lastError = "Audio engine: \(error.localizedDescription)"
+                log.error("audio engine start failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
         }
         let node = nodes[next]
         next = (next + 1) % nodes.count

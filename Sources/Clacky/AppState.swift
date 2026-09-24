@@ -2,7 +2,10 @@ import AppKit
 import Combine
 import Foundation
 import ServiceManagement
+import os
 import ClackyCore
+
+private let log = Logger(subsystem: "com.zianvalles.clacky", category: "state")
 
 final class AppState: ObservableObject {
     @Published var enabled: Bool { didSet { settings.enabled = enabled } }
@@ -51,8 +54,15 @@ final class AppState: ObservableObject {
     }
 
     /// Hot path. Runs on the main thread from the event tap.
+    private var ignoredKeyLogs = 0
     private func keyPressed(_ macCode: Int64) {
-        guard enabled, let pack else { return }
+        guard enabled, let pack else {
+            if ignoredKeyLogs < 5 {
+                ignoredKeyLogs += 1
+                log.notice("key ignored: enabled=\(self.enabled) packLoaded=\(self.pack != nil)")
+            }
+            return
+        }
         let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
         audio.play(pack.buffer(for: code))
     }
@@ -79,6 +89,9 @@ final class AppState: ObservableObject {
 
     private func ensureListening() {
         hasPermission = KeyListener.hasPermission
+        if hasPermission != isListening || !hasPermission {
+            log.notice("permission=\(self.hasPermission) listening=\(self.listener.isRunning)")
+        }
         guard hasPermission else { return }
         if listener.start() {
             tapError = nil
@@ -126,11 +139,15 @@ final class AppState: ObservableObject {
             pack = loaded
             settings.selectedPackName = name
             packError = nil
+            log.notice("pack loaded: \(name, privacy: .public) keys=\(loaded?.keyCount ?? 0) generic=\(loaded?.hasGenericPool ?? false)")
             if shouldPreview { preview() }
         case .ignore:
             return
         case .revert:
-            if case .failure(let error) = result { packError = "\(name): \(error.localizedDescription)" }
+            if case .failure(let error) = result {
+                packError = "\(name): \(error.localizedDescription)"
+                log.error("pack failed: \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         isLoadingPack = switcher.inFlight != nil
         selectedPack = switcher.selected
