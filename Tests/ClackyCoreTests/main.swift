@@ -1,0 +1,2 @@
+ScaffoldTests.run()
+TestKit.finish()
