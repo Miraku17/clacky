@@ -73,7 +73,7 @@ struct KeyboardView: View {
         }
         .frame(width: width, height: height)
         .offset(y: isDown ? unit * 0.04 : 0)
-        .animation(.easeOut(duration: 0.18), value: isDown)
+        .animation(isDown ? nil : .easeOut(duration: 0.18), value: isDown)   // light instantly, fade out
         .contentShape(Rectangle())
         .onTapGesture { if let code = cap.macKeyCode { onTap(code) } }
         .accessibilityLabel(cap.label.isEmpty ? "Touch ID" : cap.label)

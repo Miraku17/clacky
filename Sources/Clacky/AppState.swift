@@ -14,8 +14,8 @@ final class AppState: ObservableObject {
     @Published var pitchVariation: Bool { didSet { settings.pitchVariation = pitchVariation } }
     @Published private(set) var packHasReleaseSounds = false
     let pressed = PressedKeys()
-    /// True when launch found no Input Monitoring grant; the app opens its window so the instructions are visible.
-    private(set) var opensWindowOnLaunch = false
+    /// Set when launch found no Input Monitoring grant; the app opens its window so the instructions are visible.
+    private var openWindowOnLaunchPending = false
     @Published private(set) var availablePacks: [String] = []
     @Published private(set) var packInfos: [PackInfo] = []
     @Published private(set) var selectedPack: String = ""
@@ -40,6 +40,7 @@ final class AppState: ObservableObject {
 
     private var permissionPoll: Timer?
     private var windowObserver: NSObjectProtocol?
+    private var closeObserver: NSObjectProtocol?
 
     init() {
         library = PackLibrary(packsDirectory: PackLibrary.defaultPacksDirectory,
@@ -51,12 +52,18 @@ final class AppState: ObservableObject {
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }
         listener.onKeyRelease = { [weak self] code in self?.keyReleased(code) }
-        // The MenuBarExtra panel is the app's only window; refresh whenever it becomes key.
+        // Refresh whenever the panel or the main window becomes key.
         windowObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.refresh() }
+        // The main window closing is the reliable moment to drop the Dock icon again.
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            if (note.object as? NSWindow)?.title == "Clacky" { self?.windowDidClose() }
+        }
         refresh()
-        opensWindowOnLaunch = !hasPermission
+        openWindowOnLaunchPending = !hasPermission
         if !hasPermission {
             KeyListener.requestPermission()
             startPermissionPoll()
@@ -67,6 +74,10 @@ final class AppState: ObservableObject {
     private var ignoredKeyLogs = 0
     private func keyPressed(_ macCode: Int64) {
         pressed.codes.insert(macCode)
+        if ModifierTracker.isMomentary(keyCode: macCode) {
+            // Caps Lock never reports a release; synthesise one so the drawn key un-lights.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.keyReleased(macCode) }
+        }
         guard enabled, let pack else {
             if ignoredKeyLogs < 5 {
                 ignoredKeyLogs += 1
@@ -93,7 +104,14 @@ final class AppState: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.keyReleased(macCode) }
     }
 
+    /// True exactly once, on the launch that found no keyboard access.
+    func consumeOpenOnLaunch() -> Bool {
+        defer { openWindowOnLaunchPending = false }
+        return openWindowOnLaunchPending
+    }
+
     func windowDidAppear() {
+        openWindowOnLaunchPending = false
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }

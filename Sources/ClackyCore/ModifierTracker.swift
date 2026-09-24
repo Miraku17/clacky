@@ -7,9 +7,13 @@ public struct ModifierTracker {
 
     public init() {}
 
+    /// Keys that report a press but never a release (Caps Lock). Callers that
+    /// track held keys must synthesise the release themselves.
+    public static func isMomentary(keyCode: Int64) -> Bool { keyCode == 0x39 }
+
     /// Classifies a `flagsChanged` event. `flags` is `CGEvent.flags.rawValue`.
     public mutating func event(keyCode: Int64, flags: UInt64) -> ModifierEvent? {
-        if keyCode == 0x39 { return .press }   // Caps Lock reports one event per tap
+        if Self.isMomentary(keyCode: keyCode) { return .press }   // one event per tap, no release ever
         guard let mask = Self.mask(for: keyCode) else { return nil }
         let flagOn = flags & mask != 0
         if flagOn, !held.contains(keyCode) { held.insert(keyCode); return .press }

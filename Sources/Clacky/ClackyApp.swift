@@ -4,6 +4,9 @@ import SwiftUI
 struct ClackyApp: App {
     @StateObject private var state = AppState()
 
+    // Scene order matters: with MenuBarExtra first, SwiftUI does not open the
+    // Window at launch; it opens only on request (panel button, ⌘, or the
+    // launch-open below when keyboard access is missing).
     var body: some Scene {
         MenuBarExtra {
             MenuContent(state: state)
@@ -33,7 +36,7 @@ private struct MenuBarLabel: View {
     var body: some View {
         Image(systemName: state.enabled ? "keyboard" : "speaker.slash")
             .onAppear {
-                if state.opensWindowOnLaunch {
+                if state.consumeOpenOnLaunch() {
                     DispatchQueue.main.async { openWindow(id: "main") }
                 }
             }

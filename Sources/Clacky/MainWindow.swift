@@ -26,7 +26,6 @@ struct MainWindow: View {
         }
         .frame(minWidth: 760, minHeight: 460)
         .onAppear { state.windowDidAppear(); state.refresh() }
-        .onDisappear { state.windowDidClose() }
     }
 
     private var settingsColumn: some View {

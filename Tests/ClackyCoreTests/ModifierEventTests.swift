@@ -26,3 +26,13 @@ enum ModifierEventTests {
         }
     }
 }
+
+enum MomentaryKeyTests {
+    static func run() {
+        TestKit.run("ModifierTracker flags caps lock as momentary so callers synthesise its release") {
+            expect(ModifierTracker.isMomentary(keyCode: 0x39))
+            expect(!ModifierTracker.isMomentary(keyCode: 0x38))
+            expect(!ModifierTracker.isMomentary(keyCode: 0x00))
+        }
+    }
+}

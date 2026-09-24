@@ -16,6 +16,7 @@ names=(alpaca "Alpaca (linear)" blackink "Gateron Ink Black" bluealps "Blue Alps
 for pack in alpaca blackink bluealps boxnavy buckling redink topre; do
   src="$WORK/kbsim/src/assets/audio/$pack"
   dst="Resources/Packs/kbsim-$pack"
+  [[ -d "$src/press" && -d "$src/release" ]] || { echo "upstream is missing $src/press or release; nothing changed" >&2; exit 1; }
   rm -rf "$dst"; mkdir -p "$dst"
   cp -R "$src/press" "$src/release" "$dst/"
   cat > "$dst/config.json" <<JSON
