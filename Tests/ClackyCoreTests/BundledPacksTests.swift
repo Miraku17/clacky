@@ -3,6 +3,18 @@ import ClackyCore
 
 enum BundledPacksTests {
     static func run() {
+        TestKit.run("kbsim packs are bundled and carry release sounds") {
+            let lib = PackLibrary(packsDirectory: TestPaths.packsRoot, bundledPacksDirectory: nil)
+            let kbsim = lib.availablePacks().filter { $0.lastPathComponent.hasPrefix("kbsim-") }
+            expectEqual(kbsim.count, 7)
+            for folder in kbsim {
+                do {
+                    let pack = try SoundPack(folder: folder)
+                    expect(pack.hasReleaseSounds, "\(folder.lastPathComponent) should have release sounds")
+                    expect(pack.releaseBuffer(for: 57) != nil, "\(folder.lastPathComponent) space release")
+                } catch { expect(false, "\(folder.lastPathComponent): \(error.localizedDescription)") }
+            }
+        }
         TestKit.run("every bundled pack loads and plays the A key") {
             let lib = PackLibrary(packsDirectory: TestPaths.packsRoot, bundledPacksDirectory: nil)
             let packs = lib.availablePacks()
