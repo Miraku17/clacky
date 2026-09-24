@@ -8,7 +8,10 @@ final class AppState: ObservableObject {
     @Published var enabled: Bool { didSet { settings.enabled = enabled } }
     @Published var volume: Float { didSet { settings.volume = volume; audio.volume = volume } }
     @Published private(set) var availablePacks: [String] = []
+    @Published private(set) var packInfos: [PackInfo] = []
     @Published private(set) var selectedPack: String = ""
+    @Published private(set) var isListening = false
+    @Published private(set) var isLoadingPack = false
     @Published private(set) var hasPermission = false
     @Published private(set) var launchAtLogin = false
     @Published private(set) var lastError: String?
@@ -65,7 +68,8 @@ final class AppState: ObservableObject {
         } catch {
             prepareError = error.localizedDescription
         }
-        availablePacks = library.availablePacks().map(\.lastPathComponent)
+        packInfos = library.packInfos()
+        availablePacks = packInfos.map(\.folderName)
         if pack == nil, let first = availablePacks.first {
             let wanted = settings.selectedPackName ?? first
             selectPack(availablePacks.contains(wanted) ? wanted : first)
@@ -83,6 +87,13 @@ final class AppState: ObservableObject {
         } else {
             tapError = "Could not install the keyboard listener. Toggle Clacky off and on in Input Monitoring."
         }
+        isListening = listener.isRunning
+    }
+
+    /// Plays the loaded pack's Space sound so a pack can be auditioned from the panel.
+    func preview() {
+        guard let pack else { return }
+        audio.play(pack.buffer(for: 57))
     }
 
     /// Until Input Monitoring is granted, check every couple of seconds so the
@@ -96,27 +107,32 @@ final class AppState: ObservableObject {
         }
     }
 
-    func selectPack(_ name: String) {
+    /// `preview` plays a sample once the pack is in, which is what a person picking
+    /// from the list wants; the automatic load at launch stays silent.
+    func selectPack(_ name: String, preview: Bool = false) {
         guard switcher.request(name) else { return }
         selectedPack = switcher.selected
+        isLoadingPack = true
         DispatchQueue.global(qos: .userInitiated).async { [library] in
             let result = Result { try library.load(named: name) }
-            DispatchQueue.main.async { self.finishLoading(name: name, result: result) }
+            DispatchQueue.main.async { self.finishLoading(name: name, result: result, preview: preview) }
         }
     }
 
-    private func finishLoading(name: String, result: Result<SoundPack, Error>) {
+    private func finishLoading(name: String, result: Result<SoundPack, Error>, preview shouldPreview: Bool) {
         let loaded = try? result.get()
         switch switcher.finished(name, success: loaded != nil) {
         case .apply:
             pack = loaded
             settings.selectedPackName = name
             packError = nil
+            if shouldPreview { preview() }
         case .ignore:
             return
         case .revert:
             if case .failure(let error) = result { packError = "\(name): \(error.localizedDescription)" }
         }
+        isLoadingPack = switcher.inFlight != nil
         selectedPack = switcher.selected
         publishErrors()
     }
