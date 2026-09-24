@@ -22,6 +22,8 @@ public final class SoundPack {
     private let fallbackPool: [AVAudioPCMBuffer]
 
     public var keyCount: Int { buffers.count }
+    /// True for version-2 packs whose undefined keys draw from a generic pool.
+    public let hasGenericPool: Bool
 
     public init(folder: URL) throws {
         let configURL = folder.appendingPathComponent("config.json")
@@ -31,6 +33,7 @@ public final class SoundPack {
         if let n = config.name, !n.isEmpty { name = n } else { name = folder.lastPathComponent }
 
         var map: [Int: AVAudioPCMBuffer] = [:]
+        var generic: [AVAudioPCMBuffer] = []
         switch config.keyDefineType {
         case .single:
             let sprite = try Self.loadCanonical(folder.appendingPathComponent(config.sound ?? ""))
@@ -42,15 +45,27 @@ public final class SoundPack {
             }
         case .multi:
             var cache: [String: AVAudioPCMBuffer] = [:]
+            // Version-2 packs: undefined keys draw from a generic pool instead of the defined keys.
+            for file in config.genericSoundFiles where cache[file] == nil {
+                cache[file] = try Self.loadCanonical(folder.appendingPathComponent(file))
+            }
+            generic = config.genericSoundFiles.compactMap { cache[$0] }
             for (code, define) in config.defines {
                 guard case .file(let file) = define else { continue }
-                if cache[file] == nil { cache[file] = try Self.loadCanonical(folder.appendingPathComponent(file)) }
+                if cache[file] == nil {
+                    let url = folder.appendingPathComponent(file)
+                    // Upstream v2 packs list defines whose files were never shipped; with a
+                    // generic pool those keys simply use the pool. Without one it is an error.
+                    if !generic.isEmpty, !FileManager.default.fileExists(atPath: url.path) { continue }
+                    cache[file] = try Self.loadCanonical(url)
+                }
                 map[code] = cache[file]
             }
         }
-        guard !map.isEmpty else { throw Error.noSounds(name) }
+        guard !map.isEmpty || !generic.isEmpty else { throw Error.noSounds(name) }
         buffers = map
-        fallbackPool = map.keys.sorted().map { map[$0]! }
+        hasGenericPool = !generic.isEmpty
+        fallbackPool = generic.isEmpty ? map.keys.sorted().map { map[$0]! } : generic
     }
 
     /// The buffer for a Mechvibes key code, or a deterministic fallback so no key is silent.

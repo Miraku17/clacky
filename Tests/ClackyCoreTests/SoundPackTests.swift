@@ -100,3 +100,56 @@ enum SoundPackReviewTests {
         }
     }
 }
+
+enum SoundPackV2Tests {
+    static func run() {
+        TestKit.run("SoundPack v2 multi pack uses the generic pool for undefined keys") {
+            try TestKit.withTempDir { tmp in
+                let folder = tmp.appendingPathComponent("v2")
+                try FileManager.default.createDirectory(at: folder.appendingPathComponent("press"), withIntermediateDirectories: true)
+                try Data(#"{"name":"V2","key_define_type":"multi","sound":"press/G{0-1}.wav","defines":{"57":"press/space.wav"}}"#.utf8)
+                    .write(to: folder.appendingPathComponent("config.json"))
+                try TestAudio.writeWav(to: folder.appendingPathComponent("press/space.wav"), seconds: 0.3)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("press/G0.wav"), seconds: 0.1)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("press/G1.wav"), seconds: 0.1)
+                let pack = try SoundPack(folder: folder)
+                expectEqual(pack.keyCount, 1)
+                expectEqual(Double(pack.buffer(for: 57).frameLength), 14_400, accuracy: 480)
+                expectEqual(Double(pack.buffer(for: 30).frameLength), 4_800, accuracy: 480, "undefined key should come from the generic pool")
+                expect(pack.buffer(for: 30) === pack.buffer(for: 30), "deterministic per key")
+            }
+        }
+        TestKit.run("SoundPack v2 multi pack with a missing generic file names it") {
+            try TestKit.withTempDir { tmp in
+                let folder = tmp.appendingPathComponent("v2broken")
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try Data(#"{"key_define_type":"multi","sound":"G{0-1}.wav","defines":{"57":"space.wav"}}"#.utf8)
+                    .write(to: folder.appendingPathComponent("config.json"))
+                try TestAudio.writeWav(to: folder.appendingPathComponent("space.wav"), seconds: 0.1)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("G0.wav"), seconds: 0.1)
+                expectThrows(try SoundPack(folder: folder)) { error in
+                    expect(error.localizedDescription.contains("G1.wav"), error.localizedDescription)
+                }
+            }
+        }
+    }
+}
+
+enum SoundPackV2MissingDefineTests {
+    static func run() {
+        TestKit.run("SoundPack v2 multi pack skips a defined key whose file is missing when a generic pool exists") {
+            try TestKit.withTempDir { tmp in
+                let folder = tmp.appendingPathComponent("v2partial")
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try Data(#"{"key_define_type":"multi","sound":"G{0-1}.wav","defines":{"57":"space.wav","14":"ghost.wav"}}"#.utf8)
+                    .write(to: folder.appendingPathComponent("config.json"))
+                try TestAudio.writeWav(to: folder.appendingPathComponent("space.wav"), seconds: 0.3)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("G0.wav"), seconds: 0.1)
+                try TestAudio.writeWav(to: folder.appendingPathComponent("G1.wav"), seconds: 0.1)
+                let pack = try SoundPack(folder: folder)
+                expectEqual(pack.keyCount, 1)
+                expectEqual(Double(pack.buffer(for: 14).frameLength), 4_800, accuracy: 480, "missing define falls back to the generic pool")
+            }
+        }
+    }
+}

@@ -36,3 +36,22 @@ enum PackConfigTests {
         }
     }
 }
+
+enum PackConfigV2Tests {
+    static func run() {
+        TestKit.run("PackConfig expands a {a-b} generic sound pattern into file names") {
+            let json = #"{"key_define_type":"multi","sound":"press/GENERIC_R{0-4}.mp3","defines":{"57":"press/SPACE.mp3","57-up":"release/SPACE.mp3"}}"#
+            let config = try PackConfig.parse(Data(json.utf8))
+            expectEqual(config.genericSoundFiles, (0...4).map { "press/GENERIC_R\($0).mp3" })
+            expectEqual(config.defines, [57: .file("press/SPACE.mp3")])
+        }
+        TestKit.run("PackConfig plain sound name on a multi pack yields no generic files") {
+            let json = #"{"key_define_type":"multi","sound":"sound.ogg","defines":{"1":"q.wav"}}"#
+            expectEqual(try PackConfig.parse(Data(json.utf8)).genericSoundFiles, [])
+        }
+        TestKit.run("PackConfig single pack sound is never treated as a pattern list") {
+            let json = #"{"key_define_type":"single","sound":"sound.ogg","defines":{"1":[0,10]}}"#
+            expectEqual(try PackConfig.parse(Data(json.utf8)).genericSoundFiles, [])
+        }
+    }
+}

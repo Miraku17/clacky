@@ -15,13 +15,24 @@ public final class PackLibrary {
         self.bundledPacksDirectory = bundledPacksDirectory
     }
 
-    /// Creates the packs directory and, when it holds no packs, copies every bundled pack into it.
+    /// Creates the packs directory and copies in every bundled pack the user does not
+    /// already have. Existing folders are never touched, so edits survive updates.
     public func prepare() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: packsDirectory, withIntermediateDirectories: true)
-        guard availablePacks().isEmpty, let bundled = bundledPacksDirectory else { return }
+        guard let bundled = bundledPacksDirectory else { return }
         for folder in Self.packFolders(in: bundled) {
-            try fm.copyItem(at: folder, to: packsDirectory.appendingPathComponent(folder.lastPathComponent))
+            let target = packsDirectory.appendingPathComponent(folder.lastPathComponent)
+            if !fm.fileExists(atPath: target.path) { try fm.copyItem(at: folder, to: target) }
+        }
+    }
+
+    /// One entry per available pack with the display name from its config (folder name when absent).
+    public func packInfos() -> [PackInfo] {
+        availablePacks().map { folder in
+            let name = (try? PackConfig.load(from: folder.appendingPathComponent("config.json")))?.name
+            let display = (name?.isEmpty == false) ? name! : folder.lastPathComponent
+            return PackInfo(folderName: folder.lastPathComponent, displayName: display, folder: folder)
         }
     }
 
@@ -40,4 +51,11 @@ public final class PackLibrary {
             .filter { fm.fileExists(atPath: $0.appendingPathComponent("config.json").path) }
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
     }
+}
+
+public struct PackInfo: Equatable, Identifiable {
+    public var id: String { folderName }
+    public let folderName: String
+    public let displayName: String
+    public let folder: URL
 }

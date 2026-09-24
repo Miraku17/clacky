@@ -63,6 +63,18 @@ public struct PackConfig: Decodable, Equatable {
         }
     }
 
+    /// Version-2 multi packs name a pool of generic sounds with a `{a-b}` pattern,
+    /// e.g. `press/GENERIC_R{0-4}.mp3`, used for every key without a define.
+    /// Empty for single packs and for multi packs without such a pattern.
+    public var genericSoundFiles: [String] {
+        guard keyDefineType == .multi, let sound else { return [] }
+        guard let open = sound.firstIndex(of: "{"), let close = sound.firstIndex(of: "}"), open < close else { return [] }
+        let range = sound[sound.index(after: open)..<close].split(separator: "-", maxSplits: 1)
+        guard range.count == 2, let lo = Int(range[0]), let hi = Int(range[1]), lo <= hi, hi - lo < 1_000 else { return [] }
+        let prefix = sound[..<open], suffix = sound[sound.index(after: close)...]
+        return (lo...hi).map { "\(prefix)\($0)\(suffix)" }
+    }
+
     public static func parse(_ data: Data) throws -> PackConfig {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
