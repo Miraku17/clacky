@@ -14,7 +14,17 @@ System Settings > Privacy & Security > Input Monitoring.
 After every rebuild macOS may drop that grant. Toggle Clacky off and on in
 that list and sounds return.
 
+## The window
+
+Menu-bar icon → Open Clacky… (or ⌘, while Clacky is frontmost). The drawn
+keyboard lights as you type; click a key to hear it. Settings: Enabled,
+volume, pack, key release sounds (packs that ship release samples: the
+kbsim and "travel" packs), pitch variation, launch at login. The window
+opens by itself at launch when Input Monitoring is not yet granted.
+
 ## Adding sound packs
+
+Clacky ships 25 packs: the 18 Mechvibes packs and 7 from kbsim (MIT).
 
 1. Click the menu-bar icon > Open Packs Folder.
 2. Drop in a Mechvibes pack folder (it must contain `config.json`).
@@ -35,8 +45,9 @@ Layout: `Sources/ClackyCore` is the testable library (decoding, pack loading,
 key mapping, audio engine); `Sources/Clacky` is the app shell (event tap,
 state, SwiftUI panel); `Sources/CVorbis` vendors `stb_vorbis.c`.
 
-Default pack: CherryMX Blue (PBT) from the Mechvibes repository, MIT licensed.
-See `Resources/Packs/cherrymx-blue-pbt/LICENSE-MECHVIBES.txt`.
+Bundled packs come from the Mechvibes repository (`Resources/Packs/LICENSE-MECHVIBES.txt`)
+and from kbsim (`Resources/Packs/LICENSE-KBSIM.txt`), both MIT. `Tools/import-kbsim.sh`
+regenerates the kbsim folders.
 
 ## App icon
 
