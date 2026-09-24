@@ -44,3 +44,14 @@ See `Resources/Packs/cherrymx-blue-pbt/LICENSE-MECHVIBES.txt`.
 `Tools/make-icon.swift` and run:
 
     swift Tools/make-icon.swift build/icon && cp build/icon/AppIcon.icns Resources/
+
+## If keys go silent
+
+Read the app's own diagnostics (use the full path; `log` is also a zsh builtin):
+
+    /usr/bin/log show --last 5m --info --predicate 'subsystem == "com.zianvalles.clacky"' --style compact
+
+Healthy output shows `permission=true`, `event tap installed`, `pack loaded`,
+then `keyDown` lines as you type. `permission=false` means Input Monitoring is
+off for Clacky in System Settings. The app is signed with a requirement pinned
+to its bundle identifier, so rebuilding no longer invalidates that grant.
