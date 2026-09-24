@@ -1,4 +1,5 @@
 ScaffoldTests.run()
 VorbisDecoderTests.run()
 PackConfigTests.run()
+AudioBuffersTests.run()
 TestKit.finish()
