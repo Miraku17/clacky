@@ -12,6 +12,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Clacky" "$APP/Contents/MacOS/Clacky"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R Resources/Packs "$APP/Contents/Resources/Packs"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$APP"
 echo "Built $APP"
 

@@ -37,3 +37,10 @@ state, SwiftUI panel); `Sources/CVorbis` vendors `stb_vorbis.c`.
 
 Default pack: CherryMX Blue (PBT) from the Mechvibes repository, MIT licensed.
 See `Resources/Packs/cherrymx-blue-pbt/LICENSE-MECHVIBES.txt`.
+
+## App icon
+
+`Resources/AppIcon.icns` is generated, not hand-drawn. To change it, edit
+`Tools/make-icon.swift` and run:
+
+    swift Tools/make-icon.swift build/icon && cp build/icon/AppIcon.icns Resources/
