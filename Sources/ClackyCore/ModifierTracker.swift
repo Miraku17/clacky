@@ -1,3 +1,5 @@
+public enum ModifierEvent: Equatable { case press, release }
+
 /// Turns `flagsChanged` events (which carry no down/up bit) into press/release
 /// decisions by remembering which modifier key codes are currently held.
 public struct ModifierTracker {
@@ -5,14 +7,19 @@ public struct ModifierTracker {
 
     public init() {}
 
-    /// `flags` is `CGEvent.flags.rawValue`. Returns true only for a press.
-    public mutating func isPress(keyCode: Int64, flags: UInt64) -> Bool {
-        if keyCode == 0x39 { return true }   // Caps Lock reports one event per tap
-        guard let mask = Self.mask(for: keyCode) else { return false }
+    /// Classifies a `flagsChanged` event. `flags` is `CGEvent.flags.rawValue`.
+    public mutating func event(keyCode: Int64, flags: UInt64) -> ModifierEvent? {
+        if keyCode == 0x39 { return .press }   // Caps Lock reports one event per tap
+        guard let mask = Self.mask(for: keyCode) else { return nil }
         let flagOn = flags & mask != 0
-        let press = flagOn && !held.contains(keyCode)
-        if press { held.insert(keyCode) } else { held.remove(keyCode) }
-        return press
+        if flagOn, !held.contains(keyCode) { held.insert(keyCode); return .press }
+        if held.contains(keyCode) { held.remove(keyCode); return .release }
+        return nil
+    }
+
+    /// Kept for callers that only care about presses.
+    public mutating func isPress(keyCode: Int64, flags: UInt64) -> Bool {
+        event(keyCode: keyCode, flags: flags) == .press
     }
 
     static func mask(for keyCode: Int64) -> UInt64? {
