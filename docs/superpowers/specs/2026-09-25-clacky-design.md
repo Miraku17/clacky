@@ -53,13 +53,13 @@ AppKit/SwiftUI lifecycle code.
 ### 4.1 Components
 
 **KeyListener** (`Clacky`)
-- Installs a session-level, listen-only `CGEventTap` for `keyDown`, `keyUp`,
-  and `flagsChanged`.
+- Installs a session-level, listen-only `CGEventTap` for `keyDown` and
+  `flagsChanged` only. `keyUp` is not in the mask in v1.
 - Drops events where `kCGKeyboardEventAutorepeat != 0`.
 - For `flagsChanged`, determines press vs release by comparing the modifier
   flag for that key code against the previous flags state; only press is
   forwarded in v1.
-- Emits `(macKeyCode: Int64, isDown: Bool)` through a callback. Nothing else
+- Emits `(macKeyCode: Int64)` through a callback on every press. Nothing else
   happens on the tap thread beyond a dictionary lookup and a buffer schedule.
 - Re-enables the tap if the system disables it (`tapDisabledByTimeout` or
   `tapDisabledByUserInput`).
@@ -87,9 +87,10 @@ AppKit/SwiftUI lifecycle code.
     decoded into its own buffer.
 - `defines` entries that are `null` or missing are skipped.
 - Decoding: `.ogg` via `CVorbis`; everything else via `AVAudioFile`. All
-  buffers are converted to the engine's processing format (Float32,
-  48 kHz if the file differs, stereo or mono preserved) at load time so
-  playback never resamples.
+  buffers are converted at load time to one canonical format: Float32,
+  48 kHz, 2 channels (mono sources are duplicated to both channels). Every
+  player node connects to the mixer in this format, so playback never
+  resamples.
 - `buffer(for keyCode:) -> AVAudioPCMBuffer` returns the mapped buffer, or a
   deterministic-random fallback from the pack's buffers if the key is unmapped.
   No key is ever silent.
