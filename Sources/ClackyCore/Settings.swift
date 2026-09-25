@@ -5,7 +5,7 @@ public final class Settings {
     private enum Key {
         static let enabled = "enabled", volume = "volume", pack = "selectedPackName"
         static let releaseSounds = "releaseSounds", pitchVariation = "pitchVariation", stereo = "stereo"
-        static let mutedApps = "mutedApps", hotkeyEnabled = "hotkeyEnabled"
+        static let mutedApps = "mutedApps", hotkeyEnabled = "hotkeyEnabled", keycapTheme = "keycapTheme"
     }
 
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
@@ -51,5 +51,11 @@ public final class Settings {
     public var hotkeyEnabled: Bool {
         get { defaults.object(forKey: Key.hotkeyEnabled) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.hotkeyEnabled) }
+    }
+
+    /// Id of the keycap theme (see `KeycapTheme.all`).
+    public var keycapTheme: String {
+        get { defaults.string(forKey: Key.keycapTheme) ?? "classic" }
+        set { defaults.set(newValue, forKey: Key.keycapTheme) }
     }
 }

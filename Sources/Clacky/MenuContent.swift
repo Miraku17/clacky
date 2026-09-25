@@ -40,6 +40,7 @@ struct MenuContent: View {
                 .padding(.vertical, 10)
         }
         .frame(width: 300)
+        .environment(\.keycapTheme, state.theme)
         .onAppear { state.refresh() }
     }
 

@@ -30,6 +30,7 @@ struct MainWindow: View {
                 .padding(.vertical, 10)
         }
         .frame(minWidth: 760, minHeight: 520)
+        .environment(\.keycapTheme, state.theme)
         .onAppear { state.windowDidAppear(); state.refresh() }
     }
 
@@ -48,6 +49,7 @@ struct MainWindow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 36, alignment: .trailing)
             }
+            ThemePicker(selection: $state.theme)
             Text("Sound pack").font(.caption).foregroundStyle(.secondary)
             ScrollView {
                 VStack(spacing: 6) {
@@ -185,5 +187,47 @@ private struct FlowLayout: Layout {
             maxX = max(maxX, x - spacing)
         }
         return (CGSize(width: maxX, height: y + rowHeight), points)
+    }
+}
+
+/// Four small keycap pairs, one per theme; the chosen one is ringed.
+private struct ThemePicker: View {
+    @Binding var selection: KeycapTheme
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Keycaps").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(KeycapTheme.all) { theme in
+                    Button { selection = theme } label: {
+                        VStack(spacing: 4) {
+                            HStack(spacing: 3) {
+                                swatch(theme, tone: .alpha, label: "A")
+                                swatch(theme, tone: .modifier, label: "⌘")
+                            }
+                            .padding(5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(theme.id == selection.id ? Color.accentColor : Color.clear, lineWidth: 2)
+                            )
+                            Text(theme.name).font(.caption2)
+                                .foregroundStyle(theme.id == selection.id ? Color.primary : Color.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(theme.name) keycaps")
+                    .accessibilityAddTraits(theme.id == selection.id ? .isSelected : [])
+                }
+            }
+        }
+    }
+
+    private func swatch(_ theme: KeycapTheme, tone: KeyCap.Tone, label: String) -> some View {
+        Keycap3D(palette: .resolve(theme, tone: tone, keyCode: nil, scheme: scheme),
+                 pressed: false, depth: 2.5, cornerRadius: 4) {
+            Text(label).font(.system(size: 10, weight: .semibold, design: .rounded))
+        }
+        .frame(width: 22, height: 22)
     }
 }

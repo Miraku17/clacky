@@ -1,33 +1,43 @@
 import SwiftUI
+import ClackyCore
 
-/// Colours for a two-tone keycap set, matched to the app icon.
-/// Light mode: cream alphas and slate modifiers. Dark mode: charcoal set, light legends.
+
+/// Colours for one keycap, resolved from the current `KeycapTheme`.
 struct KeycapPalette {
     let face: Color
     let faceBottom: Color
     let wall: Color
     let legend: Color
+    let glow: Color
 
-    static func alpha(_ scheme: ColorScheme) -> KeycapPalette {
-        scheme == .dark
-            ? KeycapPalette(face: .rgb(96, 101, 110), faceBottom: .rgb(82, 87, 96), wall: .rgb(48, 51, 57), legend: .rgb(244, 240, 230))
-            : KeycapPalette(face: .rgb(252, 247, 238), faceBottom: .rgb(238, 229, 212), wall: .rgb(206, 190, 160), legend: .rgb(41, 42, 46))
+    init(_ c: CapColors, glow: RGB) {
+        face = Color(c.face); faceBottom = Color(c.faceBottom); wall = Color(c.wall); legend = Color(c.legend)
+        self.glow = Color(glow)
     }
 
-    static func modifier(_ scheme: ColorScheme) -> KeycapPalette {
-        scheme == .dark
-            ? KeycapPalette(face: .rgb(46, 49, 55), faceBottom: .rgb(38, 41, 46), wall: .rgb(20, 22, 25), legend: .rgb(190, 196, 206))
-            : KeycapPalette(face: .rgb(126, 136, 150), faceBottom: .rgb(108, 117, 131), wall: .rgb(72, 79, 90), legend: .rgb(248, 248, 250))
+    static func resolve(_ theme: KeycapTheme, tone: KeyCap.Tone, keyCode: Int64?, scheme: ColorScheme) -> KeycapPalette {
+        KeycapPalette(theme.colors(tone: tone, keyCode: keyCode, dark: scheme == .dark), glow: theme.glow)
     }
+}
 
-    /// The mint of the icon's sound arcs, used for the pressed glow.
-    static let glow = Color.rgb(46, 178, 158)
+private struct KeycapThemeKey: EnvironmentKey {
+    static let defaultValue = KeycapTheme.classic
+}
+
+extension EnvironmentValues {
+    /// The keycap set used by every Keycap3D below this point.
+    var keycapTheme: KeycapTheme {
+        get { self[KeycapThemeKey.self] }
+        set { self[KeycapThemeKey.self] = newValue }
+    }
 }
 
 extension Color {
     static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
         Color(.sRGB, red: r / 255, green: g / 255, blue: b / 255, opacity: 1)
     }
+
+    init(_ c: RGB) { self.init(.sRGB, red: c.r / 255, green: c.g / 255, blue: c.b / 255, opacity: 1) }
 }
 
 /// A keycap with visible depth: a side wall below a gradient top face, a thin
@@ -66,7 +76,7 @@ struct Keycap3D<Label: View>: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius * 0.85, style: .continuous)
-                            .fill(KeycapPalette.glow.opacity(pressed ? 0.38 : 0))
+                            .fill(palette.glow.opacity(pressed ? 0.38 : 0))
                             .blendMode(.plusLighter)
                     )
                     .overlay(label().foregroundStyle(palette.legend))
@@ -74,7 +84,7 @@ struct Keycap3D<Label: View>: View {
                     .offset(x: inset, y: inset * 0.5 + travel)
             }
         }
-        .shadow(color: KeycapPalette.glow.opacity(pressed ? 0.45 : 0), radius: pressed ? depth * 1.6 : 0)
+        .shadow(color: palette.glow.opacity(pressed ? 0.45 : 0), radius: pressed ? depth * 1.6 : 0)
     }
 }
 

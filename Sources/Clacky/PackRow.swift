@@ -1,4 +1,5 @@
 import SwiftUI
+import ClackyCore
 
 /// A pack shown as a wide 3D keycap: raised at rest, pressed in when selected.
 struct PackRow: View {
@@ -6,9 +7,10 @@ struct PackRow: View {
     let selected: Bool
     let loading: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.keycapTheme) private var theme
 
     var body: some View {
-        Keycap3D(palette: selected ? .alpha(scheme) : .modifier(scheme),
+        Keycap3D(palette: .resolve(theme, tone: selected ? .alpha : .modifier, keyCode: nil, scheme: scheme),
                  pressed: selected, depth: 4, cornerRadius: 9) {
             HStack(spacing: 8) {
                 Text(title)
