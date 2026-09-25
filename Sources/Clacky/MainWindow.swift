@@ -1,4 +1,5 @@
 import SwiftUI
+import ClackyCore
 
 struct MainWindow: View {
     @ObservedObject var state: AppState
@@ -16,6 +17,8 @@ struct MainWindow: View {
                     Text("Keys light up as you type. Click a key to hear it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    MutedAppsSection(state: state)
+                        .padding(.top, 8)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
@@ -26,7 +29,7 @@ struct MainWindow: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
         }
-        .frame(minWidth: 760, minHeight: 460)
+        .frame(minWidth: 760, minHeight: 520)
         .onAppear { state.windowDidAppear(); state.refresh() }
     }
 
@@ -73,8 +76,8 @@ struct MainWindow: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Circle().fill(state.isListening ? Color.green : Color.orange).frame(width: 8, height: 8)
-            Text(state.isListening ? "Listening" : "Needs keyboard access").font(.callout)
+            Circle().fill(state.statusColor).frame(width: 8, height: 8)
+            Text(state.statusText).font(.callout)
             if !state.hasPermission {
                 Button("Open Input Monitoring settings") { state.requestPermission() }.controlSize(.small)
             }
@@ -84,5 +87,103 @@ struct MainWindow: View {
             Spacer()
             Button("Open packs folder") { state.openPacksFolder() }.buttonStyle(.link)
         }
+    }
+}
+
+/// Apps in which Clacky stays silent, plus the global shortcut.
+private struct MutedAppsSection: View {
+    @ObservedObject var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Muted apps").font(.headline)
+                Spacer()
+                if let other = state.lastOtherApp, let id = other.bundleIdentifier, !state.mutedApps.contains(id) {
+                    Button("Mute in \(other.localizedName ?? id)") { state.muteApp(id) }
+                        .controlSize(.small)
+                }
+                Menu("Add app") {
+                    ForEach(state.mutableRunningApps, id: \.processIdentifier) { app in
+                        Button(app.localizedName ?? app.bundleIdentifier ?? "App") {
+                            if let id = app.bundleIdentifier { state.muteApp(id) }
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .controlSize(.small)
+            }
+            if state.mutedApps.bundleIDs.isEmpty {
+                Text("Clacky stays quiet while one of these apps is in front, for example during a video call.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                FlowRow(items: state.mutedApps.bundleIDs) { id in
+                    HStack(spacing: 6) {
+                        if let icon = state.appIcon(for: id) {
+                            Image(nsImage: icon).resizable().frame(width: 16, height: 16)
+                        }
+                        Text(state.appName(for: id)).font(.callout)
+                        Button { state.unmuteApp(id) } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help("Unmute \(state.appName(for: id))")
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
+                }
+            }
+            Divider()
+            HStack(spacing: 8) {
+                Toggle("\(GlobalHotKey.Combo.clackyToggle.display) turns sounds on and off from any app", isOn: $state.hotkeyEnabled)
+                    .toggleStyle(.checkbox)
+                if state.hotkeyUnavailable {
+                    Text("Another app is using this shortcut.").font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+}
+
+/// Lays chips out left to right, wrapping onto new lines.
+private struct FlowRow<Item: Hashable, Content: View>: View {
+    let items: [Item]
+    @ViewBuilder let content: (Item) -> Content
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items, id: \.self) { content($0) }
+        }
+    }
+}
+
+private struct FlowLayout: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews, width: proposal.width ?? .infinity).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (subview, point) in zip(subviews, arrange(subviews, width: bounds.width).points) {
+            subview.place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (size: CGSize, points: [CGPoint]) {
+        var points: [CGPoint] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            points.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return (CGSize(width: maxX, height: y + rowHeight), points)
     }
 }

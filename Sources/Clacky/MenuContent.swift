@@ -48,13 +48,13 @@ struct MenuContent: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             Circle()
-                .fill(state.isListening ? Color.green : Color.orange)
+                .fill(state.statusColor)
                 .frame(width: 8, height: 8)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Clacky")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
-                Text(state.isListening ? "Listening" : "Needs keyboard access")
+                Text(state.statusText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -34,7 +34,7 @@ private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Image(systemName: state.enabled ? "keyboard" : "speaker.slash")
+        Image(systemName: state.silenceReason == nil ? "keyboard" : "speaker.slash")
             .onAppear {
                 if state.consumeOpenOnLaunch() {
                     DispatchQueue.main.async { openWindow(id: "main") }
