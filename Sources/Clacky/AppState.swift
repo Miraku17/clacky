@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published var pitchVariation: Bool { didSet { settings.pitchVariation = pitchVariation } }
     @Published var stereo: Bool { didSet { settings.stereo = stereo } }
     @Published private(set) var mutedApps: MutedApps
+    @Published var theme: KeycapTheme { didSet { settings.keycapTheme = theme.id } }
     @Published var hotkeyEnabled: Bool { didSet { settings.hotkeyEnabled = hotkeyEnabled; applyHotkey() } }
     @Published private(set) var hotkeyUnavailable = false
     /// The frontmost app's bundle id, kept current from NSWorkspace notifications.
@@ -62,6 +63,7 @@ final class AppState: ObservableObject {
         pitchVariation = settings.pitchVariation
         stereo = settings.stereo
         mutedApps = MutedApps(bundleIDs: settings.mutedApps)
+        theme = KeycapTheme.named(settings.keycapTheme)
         hotkeyEnabled = settings.hotkeyEnabled
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }

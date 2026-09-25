@@ -7,6 +7,7 @@ struct KeyboardView: View {
     let onTap: (Int64) -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.keycapTheme) private var theme
     private let rows = KeyboardLayout.macBookAirUS
     private let gap: CGFloat = 0.08   // in key units
 
@@ -65,7 +66,7 @@ struct KeyboardView: View {
         // so a stacked 0.5 + 0.5 pair ends up exactly as tall as a 1u key.
         let width = (CGFloat(cap.width) - gap) * unit
         let height = (CGFloat(cap.height) - gap) * unit
-        let palette = cap.tone == .alpha ? KeycapPalette.alpha(scheme) : KeycapPalette.modifier(scheme)
+        let palette = KeycapPalette.resolve(theme, tone: cap.tone, keyCode: cap.macKeyCode, scheme: scheme)
         Keycap3D(palette: palette, pressed: isDown,
                  depth: max(2, unit * (cap.height < 1 ? 0.07 : 0.1)),
                  cornerRadius: unit * 0.14) {
