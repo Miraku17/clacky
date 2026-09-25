@@ -1,39 +1,33 @@
 import SwiftUI
 
-/// A pack shown as a keycap: raised at rest, pressed when selected.
+/// A pack shown as a wide 3D keycap: raised at rest, pressed in when selected.
 struct PackRow: View {
     let title: String
     let selected: Bool
     let loading: Bool
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.system(.body, design: .rounded, weight: selected ? .semibold : .regular))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 4)
-            if loading {
-                ProgressView().controlSize(.small)
-            } else if selected {
-                Image(systemName: "checkmark")
-                    .font(.system(.caption, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
+        Keycap3D(palette: selected ? .alpha(scheme) : .modifier(scheme),
+                 pressed: selected, depth: 4, cornerRadius: 9) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(.body, design: .rounded, weight: selected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
+                if loading {
+                    ProgressView().controlSize(.small)
+                } else if selected {
+                    Image(systemName: "checkmark").font(.system(.caption, weight: .bold))
+                }
             }
+            .padding(.horizontal, 12)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(selected ? Color.accentColor.opacity(0.16) : Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(selected ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.10), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(selected ? 0.06 : 0.16), radius: selected ? 0.5 : 1.5, x: 0, y: selected ? 0.5 : 2)
-        )
-        .offset(y: selected ? 1 : 0)
+        .frame(height: 40)
+        .animation(.spring(response: 0.22, dampingFraction: 0.65), value: selected)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

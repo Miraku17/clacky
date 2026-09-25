@@ -9,8 +9,10 @@ struct MainWindow: View {
                 settingsColumn
                     .frame(width: 260)
                 VStack(alignment: .leading, spacing: 10) {
-                    KeyboardView(pressed: state.pressed) { state.previewKey($0) }
-                        .frame(maxWidth: .infinity)
+                    KeyboardChassis(padding: 14) {
+                        KeyboardView(pressed: state.pressed) { state.previewKey($0) }
+                    }
+                    .frame(maxWidth: .infinity)
                     Text("Keys light up as you type. Click a key to hear it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -6,6 +6,7 @@ struct KeyboardView: View {
     @ObservedObject var pressed: PressedKeys
     let onTap: (Int64) -> Void
 
+    @Environment(\.colorScheme) private var scheme
     private let rows = KeyboardLayout.macBookAirUS
     private let gap: CGFloat = 0.08   // in key units
 
@@ -49,6 +50,14 @@ struct KeyboardView: View {
         return result
     }
 
+    /// One size per legend class, so F1 matches F12 and fn matches control:
+    /// single-character typing keys are large, arrow glyphs medium, word legends small.
+    private func legendScale(_ cap: KeyCap) -> CGFloat {
+        if cap.tone == .alpha && cap.label.count == 1 { return 0.32 }
+        if cap.label.count == 1 { return 0.22 }
+        return 0.18
+    }
+
     @ViewBuilder
     private func keycap(_ cap: KeyCap, unit: CGFloat) -> some View {
         let isDown = cap.macKeyCode.map { pressed.codes.contains($0) } ?? false
@@ -56,27 +65,22 @@ struct KeyboardView: View {
         // so a stacked 0.5 + 0.5 pair ends up exactly as tall as a 1u key.
         let width = (CGFloat(cap.width) - gap) * unit
         let height = (CGFloat(cap.height) - gap) * unit
-        ZStack {
-            RoundedRectangle(cornerRadius: unit * 0.16, style: .continuous)
-                .fill(isDown ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: unit * 0.16, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(isDown ? 0 : 0.12), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(isDown ? 0.05 : 0.18), radius: isDown ? 0.5 : unit * 0.06, y: isDown ? 0.5 : unit * 0.06)
+        let palette = cap.tone == .alpha ? KeycapPalette.alpha(scheme) : KeycapPalette.modifier(scheme)
+        Keycap3D(palette: palette, pressed: isDown,
+                 depth: max(2, unit * (cap.height < 1 ? 0.07 : 0.1)),
+                 cornerRadius: unit * 0.14) {
             Text(cap.label)
-                .font(.system(size: max(9, unit * (cap.label.count > 2 ? 0.22 : 0.34)), design: .rounded))
-                .foregroundStyle(isDown ? Color.white : Color.primary)
+                .font(.system(size: max(9, unit * legendScale(cap)),
+                              weight: cap.tone == .alpha ? .semibold : .medium, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .padding(.horizontal, 2)
         }
         .frame(width: width, height: height)
-        .offset(y: isDown ? unit * 0.04 : 0)
-        .animation(isDown ? nil : .easeOut(duration: 0.18), value: isDown)   // light instantly, fade out
+        .animation(isDown ? .easeOut(duration: 0.03) : .spring(response: 0.22, dampingFraction: 0.6), value: isDown)
         .contentShape(Rectangle())
         .onTapGesture { if let code = cap.macKeyCode { onTap(code) } }
         .accessibilityLabel(cap.label.isEmpty ? "Touch ID" : cap.label)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(cap.macKeyCode == nil ? [] : .isButton)
     }
 }
