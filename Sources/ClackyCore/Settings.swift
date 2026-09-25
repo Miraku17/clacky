@@ -5,6 +5,7 @@ public final class Settings {
     private enum Key {
         static let enabled = "enabled", volume = "volume", pack = "selectedPackName"
         static let releaseSounds = "releaseSounds", pitchVariation = "pitchVariation", stereo = "stereo"
+        static let mutedApps = "mutedApps", hotkeyEnabled = "hotkeyEnabled"
     }
 
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
@@ -38,5 +39,17 @@ public final class Settings {
     public var stereo: Bool {
         get { defaults.object(forKey: Key.stereo) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.stereo) }
+    }
+
+    /// Bundle identifiers of apps in which Clacky stays silent.
+    public var mutedApps: [String] {
+        get { defaults.stringArray(forKey: Key.mutedApps) ?? [] }
+        set { defaults.set(newValue, forKey: Key.mutedApps) }
+    }
+
+    /// Whether ⌃⌥⌘C toggles sounds from anywhere.
+    public var hotkeyEnabled: Bool {
+        get { defaults.object(forKey: Key.hotkeyEnabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.hotkeyEnabled) }
     }
 }

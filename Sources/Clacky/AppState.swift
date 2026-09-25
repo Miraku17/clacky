@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Combine
 import Foundation
 import ServiceManagement
@@ -13,6 +14,15 @@ final class AppState: ObservableObject {
     @Published var releaseSounds: Bool { didSet { settings.releaseSounds = releaseSounds } }
     @Published var pitchVariation: Bool { didSet { settings.pitchVariation = pitchVariation } }
     @Published var stereo: Bool { didSet { settings.stereo = stereo } }
+    @Published private(set) var mutedApps: MutedApps
+    @Published var hotkeyEnabled: Bool { didSet { settings.hotkeyEnabled = hotkeyEnabled; applyHotkey() } }
+    @Published private(set) var hotkeyUnavailable = false
+    /// The frontmost app's bundle id, kept current from NSWorkspace notifications.
+    @Published private(set) var frontmostBundleID: String?
+    /// The last app in front that was not Clacky: what "Add current app" means while the window is open.
+    @Published private(set) var lastOtherApp: NSRunningApplication?
+    private var hotKey: GlobalHotKey?
+    private var activationObserver: NSObjectProtocol?
     @Published private(set) var packHasReleaseSounds = false
     let pressed = PressedKeys()
     /// Set when launch found no Input Monitoring grant; the app opens its window so the instructions are visible.
@@ -51,6 +61,8 @@ final class AppState: ObservableObject {
         releaseSounds = settings.releaseSounds
         pitchVariation = settings.pitchVariation
         stereo = settings.stereo
+        mutedApps = MutedApps(bundleIDs: settings.mutedApps)
+        hotkeyEnabled = settings.hotkeyEnabled
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }
         listener.onKeyRelease = { [weak self] code in self?.keyReleased(code) }
@@ -64,6 +76,9 @@ final class AppState: ObservableObject {
         ) { [weak self] note in
             if (note.object as? NSWindow)?.title == "Clacky" { self?.windowDidClose() }
         }
+        trackFrontmostApp()
+        hotKey = GlobalHotKey(combo: .clackyToggle) { [weak self] in self?.enabled.toggle() }
+        applyHotkey()
         refresh()
         openWindowOnLaunchPending = !hasPermission
         if !hasPermission {
@@ -80,7 +95,7 @@ final class AppState: ObservableObject {
             // Caps Lock never reports a release; synthesise one so the drawn key un-lights.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.keyReleased(macCode) }
         }
-        guard enabled, let pack else {
+        guard silenceReason == nil, let pack else {
             if ignoredKeyLogs < 5 {
                 ignoredKeyLogs += 1
                 log.notice("key ignored: enabled=\(self.enabled) packLoaded=\(self.pack != nil)")
@@ -93,7 +108,7 @@ final class AppState: ObservableObject {
 
     private func keyReleased(_ macCode: Int64) {
         pressed.codes.remove(macCode)
-        guard enabled, releaseSounds, let pack else { return }
+        guard silenceReason == nil, releaseSounds, let pack else { return }
         let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
         if let buffer = pack.releaseBuffer(for: code) { audio.play(buffer, rate: currentRate(), pan: pan(for: macCode)) }
     }
@@ -101,6 +116,82 @@ final class AppState: ObservableObject {
     private func currentRate() -> Float { pitchVariation ? PitchVariation.rate() : 1 }
 
     private func pan(for macCode: Int64) -> Float { stereo ? KeyboardLayout.pan(forMacKeyCode: macCode) : 0 }
+
+    // MARK: Muting
+
+    /// Why keystrokes are silent right now, or nil when they play.
+    var silenceReason: SilenceReason? {
+        SoundGate.reason(enabled: enabled, frontmostBundleID: frontmostBundleID, mutedApps: mutedApps)
+    }
+
+    var statusText: String {
+        let name: String?
+        if case .mutedIn(let id) = silenceReason { name = appName(for: id) } else { name = nil }
+        return StatusText.make(hasPermission: hasPermission, listening: isListening, reason: silenceReason, appName: name)
+    }
+
+    /// Green when clicking, grey when deliberately silent, orange when access is missing.
+    var statusColor: Color {
+        if !hasPermission { return .orange }
+        if silenceReason != nil { return .secondary }
+        return isListening ? .green : .orange
+    }
+
+    func muteApp(_ bundleID: String) {
+        mutedApps.add(bundleID)
+        settings.mutedApps = mutedApps.bundleIDs
+    }
+
+    func unmuteApp(_ bundleID: String) {
+        mutedApps.remove(bundleID)
+        settings.mutedApps = mutedApps.bundleIDs
+    }
+
+    /// Running apps with a Dock presence that are not muted yet, for the "Add app" menu.
+    var mutableRunningApps: [NSRunningApplication] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != nil }
+            .filter { $0.bundleIdentifier != MutedApps.ownBundleID && !mutedApps.contains($0.bundleIdentifier) }
+            .sorted { ($0.localizedName ?? "").localizedCaseInsensitiveCompare($1.localizedName ?? "") == .orderedAscending }
+    }
+
+    func appName(for bundleID: String) -> String {
+        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+           let name = running.localizedName { return name }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        }
+        return bundleID
+    }
+
+    func appIcon(for bundleID: String) -> NSImage? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    private func trackFrontmostApp() {
+        let front = NSWorkspace.shared.frontmostApplication
+        frontmostBundleID = front?.bundleIdentifier
+        if front?.bundleIdentifier != MutedApps.ownBundleID { lastOtherApp = front }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            self?.frontmostBundleID = app?.bundleIdentifier
+            if let app, app.bundleIdentifier != MutedApps.ownBundleID { self?.lastOtherApp = app }
+        }
+    }
+
+    private func applyHotkey() {
+        guard let hotKey else { return }
+        if hotkeyEnabled {
+            hotkeyUnavailable = !hotKey.register()
+            if hotkeyUnavailable { log.error("hotkey \(hotKey.combo.display, privacy: .public) is taken") }
+        } else {
+            hotKey.unregister()
+            hotkeyUnavailable = false
+        }
+    }
 
     /// A click on the drawn keyboard: press now, release 80 ms later.
     func previewKey(_ macCode: Int64) {
