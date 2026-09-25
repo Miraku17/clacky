@@ -6,6 +6,19 @@ public struct KeyCap: Identifiable, Equatable {
     public let macKeyCode: Int64?
     public let width: Double
     public let height: Double
+
+    /// Two-tone keycap sets colour the typing keys differently from the rest.
+    public enum Tone: Equatable { case alpha, modifier }
+
+    /// Letters, digits, symbols and space are `.alpha`; every other key (modifiers,
+    /// tab/delete/return, the function row, arrows, Touch ID) is `.modifier`.
+    public var tone: Tone {
+        guard height >= 1, !id.hasSuffix("-up"), !id.hasSuffix("-down"), let code = macKeyCode else { return .modifier }
+        if code == 0x31 { return .alpha }                                  // space
+        if KeyboardLayout.modifierCodes.contains(code) { return .modifier }
+        if [0x30, 0x33, 0x24, 0x7B, 0x7C].contains(code) { return .modifier } // tab, delete, return, ◀ ▶
+        return .alpha
+    }
 }
 
 public enum KeyboardLayout {
