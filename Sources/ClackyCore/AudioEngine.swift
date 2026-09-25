@@ -15,6 +15,8 @@ public final class AudioEngine {
     public private(set) var lastError: String?
     /// The clamped rate handed to the most recent voice (1 = natural pitch).
     public private(set) var lastAppliedRate: Float = 1
+    /// The clamped pan handed to the most recent voice (−1 left … 1 right).
+    public private(set) var lastAppliedPan: Float = 0
 
     public init(voices: Int = 16) {
         for _ in 0..<max(1, voices) {
@@ -29,6 +31,25 @@ public final class AudioEngine {
         engine.prepare()
     }
 
+    /// An engine that renders into memory instead of the speakers, `offlineFrames`
+    /// at a time. Used to check what the mix actually sounds like.
+    public convenience init(voices: Int, offlineFrames: AVAudioFrameCount) throws {
+        self.init(voices: voices)
+        engine.stop()
+        try engine.enableManualRenderingMode(.offline, format: AudioBuffers.canonicalFormat,
+                                             maximumFrameCount: offlineFrames)
+        engine.prepare()
+    }
+
+    /// Renders the next `frames` of the mix. Only valid for an offline engine.
+    public func renderOffline(frames: AVAudioFrameCount) throws -> AVAudioPCMBuffer {
+        lock.lock(); defer { lock.unlock() }
+        let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: frames)!
+        let status = try engine.renderOffline(frames, to: out)
+        guard status == .success else { throw AudioBuffers.Error.conversionFailed("offline render status \(status.rawValue)") }
+        return out
+    }
+
     public var volume: Float {
         get { engine.mainMixerNode.outputVolume }
         set { engine.mainMixerNode.outputVolume = max(0, min(1, newValue)) }
@@ -36,7 +57,7 @@ public final class AudioEngine {
 
     /// Schedules the buffer on the next voice at `rate` (1 = natural pitch, clamped 0.5…2).
     /// Starts (or restarts, after an output-device change) the engine lazily.
-    public func play(_ buffer: AVAudioPCMBuffer, rate: Float = 1) {
+    public func play(_ buffer: AVAudioPCMBuffer, rate: Float = 1, pan: Float = 0) {
         lock.lock(); defer { lock.unlock() }
         if !engine.isRunning {
             do { try engine.start(); lastError = nil; log.notice("audio engine started") }
@@ -51,6 +72,9 @@ public final class AudioEngine {
         let clamped = max(0.5, min(2, rate))
         lastAppliedRate = clamped
         voice.varispeed.rate = clamped
+        let clampedPan = max(-1, min(1, pan))
+        lastAppliedPan = clampedPan
+        voice.player.pan = clampedPan
         voice.player.stop()
         voice.player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
         voice.player.play()

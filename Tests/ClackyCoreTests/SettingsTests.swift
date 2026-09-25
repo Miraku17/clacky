@@ -59,3 +59,16 @@ enum SettingsV2Tests {
         }
     }
 }
+
+enum SettingsStereoTests {
+    static func run() {
+        TestKit.run("Settings stereo defaults on and round-trips") {
+            let suite = "clacky-tests-\(UUID().uuidString)"
+            let d = UserDefaults(suiteName: suite)!
+            defer { d.removePersistentDomain(forName: suite) }
+            expect(Settings(defaults: d).stereo)
+            Settings(defaults: d).stereo = false
+            expect(!Settings(defaults: d).stereo)
+        }
+    }
+}

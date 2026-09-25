@@ -4,7 +4,7 @@ public final class Settings {
     private let defaults: UserDefaults
     private enum Key {
         static let enabled = "enabled", volume = "volume", pack = "selectedPackName"
-        static let releaseSounds = "releaseSounds", pitchVariation = "pitchVariation"
+        static let releaseSounds = "releaseSounds", pitchVariation = "pitchVariation", stereo = "stereo"
     }
 
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
@@ -32,5 +32,11 @@ public final class Settings {
     public var pitchVariation: Bool {
         get { defaults.object(forKey: Key.pitchVariation) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.pitchVariation) }
+    }
+
+    /// Pan each key by its position on the keyboard.
+    public var stereo: Bool {
+        get { defaults.object(forKey: Key.stereo) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.stereo) }
     }
 }

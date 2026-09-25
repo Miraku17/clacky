@@ -55,6 +55,31 @@ public enum KeyboardLayout {
         arrowsRow(),
     ]
 
+    /// How far a key at the very edge of the board is panned (0 = centre, 1 = one ear only).
+    public static let maxPan: Float = 0.6
+
+    /// Stereo position of a key from where it sits on the drawn board: −maxPan at the
+    /// left edge, +maxPan at the right, 0 for keys not on the board. Precomputed once.
+    public static func pan(forMacKeyCode code: Int64) -> Float { panTable[code] ?? 0 }
+
+    private static let panTable: [Int64: Float] = {
+        var table: [Int64: Float] = [:]
+        for row in macBookAirUS {
+            var x = 0.0
+            for cap in row {
+                // The stacked ▲▼ pair shares one column: ▼ reuses ▲'s x and adds no width.
+                let isDown = cap.id.hasSuffix("-down")
+                let left = isDown ? x - cap.width : x
+                if let code = cap.macKeyCode {
+                    let centre = (left + cap.width / 2) / rowUnits          // 0…1 across the board
+                    table[code] = Float(centre * 2 - 1) * maxPan
+                }
+                if !isDown { x += cap.width }
+            }
+        }
+        return table
+    }()
+
     /// Bottom row; the up/down pair shares one column and gets ids `5-<col>-up` / `5-<col>-down`.
     private static func arrowsRow() -> [KeyCap] {
         var caps = row(5, [k("fn", 0x3F), k("control", 0x3B), k("option", 0x3A), k("command", 0x37, 1.25),

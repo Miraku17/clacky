@@ -63,6 +63,8 @@ struct MainWindow: View {
                     Text("This pack has no release sounds.").font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle("Pitch variation", isOn: $state.pitchVariation)
+                Toggle("Stereo by key position", isOn: $state.stereo)
+                    .help("Left-hand keys sound in your left ear, right-hand keys in your right")
                 Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: { state.setLaunchAtLogin($0) }))
             }
             .toggleStyle(.checkbox)

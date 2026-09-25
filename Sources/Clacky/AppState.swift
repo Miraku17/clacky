@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
     @Published var volume: Float { didSet { settings.volume = volume; audio.volume = volume } }
     @Published var releaseSounds: Bool { didSet { settings.releaseSounds = releaseSounds } }
     @Published var pitchVariation: Bool { didSet { settings.pitchVariation = pitchVariation } }
+    @Published var stereo: Bool { didSet { settings.stereo = stereo } }
     @Published private(set) var packHasReleaseSounds = false
     let pressed = PressedKeys()
     /// Set when launch found no Input Monitoring grant; the app opens its window so the instructions are visible.
@@ -49,6 +50,7 @@ final class AppState: ObservableObject {
         volume = settings.volume
         releaseSounds = settings.releaseSounds
         pitchVariation = settings.pitchVariation
+        stereo = settings.stereo
         audio.volume = settings.volume
         listener.onKeyPress = { [weak self] code in self?.keyPressed(code) }
         listener.onKeyRelease = { [weak self] code in self?.keyReleased(code) }
@@ -86,17 +88,19 @@ final class AppState: ObservableObject {
             return
         }
         let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
-        audio.play(pack.buffer(for: code), rate: currentRate())
+        audio.play(pack.buffer(for: code), rate: currentRate(), pan: pan(for: macCode))
     }
 
     private func keyReleased(_ macCode: Int64) {
         pressed.codes.remove(macCode)
         guard enabled, releaseSounds, let pack else { return }
         let code = KeyMap.mechvibesCode(forMacKeyCode: macCode) ?? Int(macCode) + 100_000
-        if let buffer = pack.releaseBuffer(for: code) { audio.play(buffer, rate: currentRate()) }
+        if let buffer = pack.releaseBuffer(for: code) { audio.play(buffer, rate: currentRate(), pan: pan(for: macCode)) }
     }
 
     private func currentRate() -> Float { pitchVariation ? PitchVariation.rate() : 1 }
+
+    private func pan(for macCode: Int64) -> Float { stereo ? KeyboardLayout.pan(forMacKeyCode: macCode) : 0 }
 
     /// A click on the drawn keyboard: press now, release 80 ms later.
     func previewKey(_ macCode: Int64) {
